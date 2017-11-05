@@ -15,7 +15,11 @@ dist_pkgdata_DATA = \
 	freesat.t2 \
 	unicable.xml \
 	hd-testcard.mvi \
-	distro-logo.png
+	distro-logo.png \ 
+        skin_default_egami.xml \
+        picon_default.png \
+        keymap.ntr \
+        radio.mvi
 
 if HAVE_TEXTLCD
 SUBDIRS += displaytext
