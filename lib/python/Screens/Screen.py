@@ -1,182 +1,327 @@
+# uncompyle6 version 2.13.2
+# Python bytecode 2.7 (62211)
+# Decompiled from: Python 2.7.12 (default, Nov 19 2016, 06:48:10) 
+# [GCC 5.4.0 20160609]
+# Embedded file name: /usr/lib/enigma2/python/Screens/Screen.py
+# Compiled at: 2017-10-02 01:52:09
 from Tools.Profile import profile
-
-profile("LOAD:GUISkin")
+from enigma import eTimerePoint
+from Components.config import config
+from Components.SystemInfo import SystemInfo
+profile('LOAD:GUISkin')
 from Components.GUISkin import GUISkin
-profile("LOAD:Source")
+profile('LOAD:Source')
 from Components.Sources.Source import Source
-profile("LOAD:GUIComponent")
+profile('LOAD:GUIComponent')
 from Components.GUIComponent import GUIComponent
-profile("LOAD:eRCInput")
+profile('LOAD:eRCInput')
 from enigma import eRCInput
+topSession = None
 
 class Screen(dict, GUISkin):
+    False, SUSPEND_STOPS, SUSPEND_PAUSES = range(3)
+    ALLOW_SUSPEND = False
+    global_screen = None
 
-	False, SUSPEND_STOPS, SUSPEND_PAUSES = range(3)
-	ALLOW_SUSPEND = False
+    def __init__(self, session, parent=None, fademenu=False):
+        global topSession
+        dict.__init__(self)
+        self.skinName = self.__class__.__name__
+        self.session = session
+        self.parent = parent
+        self.fademenu = config.misc.fadeShowMenu.value or fademenu
+        GUISkin.__init__(self)
+        self.onClose = []
+        self.onFirstExecBegin = []
+        self.onExecBegin = []
+        self.onExecEnd = []
+        self.onShown = []
+        self.onShow = []
+        self.onHide = []
+        self.active_components = []
+        self.onShowCode = []
+        self.onHideCode = []
+        self.execing = False
+        self.shown = True
+        self.already_shown = False
+        self.renderer = []
+        self.helpList = []
+        self.close_on_next_exec = None
+        self.stand_alone = False
+        self.keyboardMode = None
+        self.aFadeInDimmed = 0
+        self.aFadeInTimer = eTimer()
+        if config.misc.fadeShowMenu.value:
+            if self.skinName not in ('Mute', 'Volume', 'PictureInPicture', 'PictureInPictureZapping',
+                                     'Dishpip', 'EGAMIMainNews', 'PiPSetup'):
+                self.aFadeInTimer.callback.append(self.doaFadeIn)
+        topSession = self.session
+        if config.misc.enableAnimationMenuScreens.value:
+            self.onShow.append(self.animateMenuOnShow)
+        return
 
-	global_screen = None
+    def animateMenuOnShow(self):
+        try:
+            if self.skinName[0] == 'MessageBox' or self.skinName[0] == 'MessageBoxSimple' or self.skinName[0] == 'EPGSearch' or self.skinName[0].endswith('_summary') or self.skinName[0].endswith('Summary'):
+                return
+        except:
+            pass
 
-	def __init__(self, session, parent = None):
-		dict.__init__(self)
-		self.skinName = self.__class__.__name__
-		self.session = session
-		self.parent = parent
-		GUISkin.__init__(self)
+        if config.misc.enableAnimationMenuScreens.value and self.skinName not in ('PictureInPicture',
+                                                                                  'PictureInPictureZapping',
+                                                                                  'Dishpip',
+                                                                                  'InfoBar',
+                                                                                  'SecondInfoBar',
+                                                                                  'MoviePlayer',
+                                                                                  'SimpleSummary',
+                                                                                  'MessageBox_summary',
+                                                                                  'MessageBox',
+                                                                                  'EGEmuManagerStarting',
+                                                                                  'EGConnectionAnimation',
+                                                                                  'UnhandledKey',
+                                                                                  'EGAMIMainNews',
+                                                                                  'UpdateEGAMI',
+                                                                                  'QuitMainloopScreen',
+                                                                                  'Volume',
+                                                                                  'ChannelSelection',
+                                                                                  'QuickSubtitlesConfigMenu',
+                                                                                  'EMCMediaCenter',
+                                                                                  'PVRState',
+                                                                                  'TimeshiftState',
+                                                                                  'SmartConsole',
+                                                                                  'Screensaver',
+                                                                                  'SubtitleDisplay',
+                                                                                  'RdsInfoDisplay',
+                                                                                  'Console',
+                                                                                  'MessageBoxSimple',
+                                                                                  'IPTVPlayerWidget'):
+            start_x = config.usage.addedinfobar_offposition_x.value
+            start_y = config.usage.addedinfobar_offposition_y.value
+            end_x = config.usage.addedinfobar_standartposition_x.value
+            end_y = config.usage.addedinfobar_standartposition_y.value
+            self.instance.startMoveAnimation(ePoint(start_x, start_y), ePoint(end_x, end_y), -9, 1, 10)
 
-		self.onClose = [ ]
-		self.onFirstExecBegin = [ ]
-		self.onExecBegin = [ ]
-		self.onExecEnd = [ ]
-		self.onShown = [ ]
+    def saveKeyboardMode(self):
+        rcinput = eRCInput.getInstance()
+        self.keyboardMode = rcinput.getKeyboardMode()
 
-		self.onShow = [ ]
-		self.onHide = [ ]
+    def setKeyboardModeAscii(self):
+        rcinput = eRCInput.getInstance()
+        rcinput.setKeyboardMode(rcinput.kmAscii)
 
-		self.execing = False
+    def setKeyboardModeNone(self):
+        rcinput = eRCInput.getInstance()
+        rcinput.setKeyboardMode(rcinput.kmNone)
 
-		self.shown = True
-		# already shown is false until the screen is really shown (after creation)
-		self.already_shown = False
+    def restoreKeyboardMode(self):
+        rcinput = eRCInput.getInstance()
+        if self.keyboardMode is not None:
+            rcinput.setKeyboardMode(self.keyboardMode)
+        return
 
-		self.renderer = [ ]
+    def execBegin(self):
+        self.active_components = []
+        if self.close_on_next_exec is not None:
+            tmp = self.close_on_next_exec
+            self.close_on_next_exec = None
+            self.execing = True
+            self.close(*tmp)
+        else:
+            single = self.onFirstExecBegin
+            self.onFirstExecBegin = []
+            for x in self.onExecBegin + single:
+                x()
+                if not self.stand_alone and self.session.current_dialog != self:
+                    return
 
-		# in order to support screens *without* a help,
-		# we need the list in every screen. how ironic.
-		self.helpList = [ ]
+        for val in self.values() + self.renderer:
+            val.execBegin()
+            if not self.stand_alone and self.session.current_dialog != self:
+                return
+            self.active_components.append(val)
 
-		self.close_on_next_exec = None
+        self.execing = True
+        for x in self.onShown:
+            x()
 
-		# stand alone screens (for example web screens)
-		# don't care about having or not having focus.
-		self.stand_alone = False
-		self.keyboardMode = None
+        return
 
-	def saveKeyboardMode(self):
-		rcinput = eRCInput.getInstance()
-		self.keyboardMode = rcinput.getKeyboardMode()
+    def execEnd(self):
+        active_components = self.active_components
+        if active_components is not None:
+            self.active_components = None
+            for val in active_components:
+                val.execEnd()
 
-	def setKeyboardModeAscii(self):
-		rcinput = eRCInput.getInstance()
-		rcinput.setKeyboardMode(rcinput.kmAscii)
+        self.execing = False
+        for x in self.onExecEnd:
+            x()
 
-	def setKeyboardModeNone(self):
-		rcinput = eRCInput.getInstance()
-		rcinput.setKeyboardMode(rcinput.kmNone)
+        return
 
-	def restoreKeyboardMode(self):
-		rcinput = eRCInput.getInstance()
-		if self.keyboardMode is not None:
-			rcinput.setKeyboardMode(self.keyboardMode)
+    def doClose(self):
+        self.hide()
+        for x in self.onClose:
+            x()
 
-	def execBegin(self):
-		self.active_components = [ ]
-		if self.close_on_next_exec is not None:
-			tmp = self.close_on_next_exec
-			self.close_on_next_exec = None
-			self.execing = True
-			self.close(*tmp)
-		else:
-			single = self.onFirstExecBegin
-			self.onFirstExecBegin = []
-			for x in self.onExecBegin + single:
-				x()
-				if not self.stand_alone and self.session.current_dialog != self:
-					return
+        del self.helpList
+        GUISkin.close(self)
+        for val in self.renderer:
+            val.disconnectAll()
 
-#			assert self.session == None, "a screen can only exec once per time"
-#			self.session = session
+        del self.session
+        for name, val in self.items():
+            try:
+                val.destroy()
+            except:
+                pass
 
-			for val in self.values() + self.renderer:
-				val.execBegin()
-				if not self.stand_alone and self.session.current_dialog != self:
-					return
-				self.active_components.append(val)
+            del self[name]
 
-			self.execing = True
+        self.renderer = []
+        self.__dict__.clear()
 
-			for x in self.onShown:
-				x()
+    def close(self, *retval):
+        global topSession
+        if self.parent and hasattr(self.parent, 'session'):
+            topSession = self.parent.session
+        if hasattr(self, 'execing') and not self.execing:
+            self.close_on_next_exec = retval
+        else:
+            try:
+                self.session.close(self, *retval)
+            except:
+                pass
 
-	def execEnd(self):
-		active_components = self.active_components
-#		for (name, val) in self.items():
-		self.active_components = None
-		for val in active_components:
-			val.execEnd()
-#		assert self.session != None, "execEnd on non-execing screen!"
-#		self.session = None
-		self.execing = False
-		for x in self.onExecEnd:
-			x()
+    def setFocus(self, o):
+        self.instance.setFocus(o.instance)
 
-	# never call this directly - it will be called from the session!
-	def doClose(self):
-		self.hide()
-		for x in self.onClose:
-			x()
+    def doaFadeIn(self):
+        if SystemInfo['CanChangeOsdAlpha']:
+            self.aFadeInDimmed = self.aFadeInDimmed + 1
+            if self.shown != False:
+                try:
+                    f = open('/proc/stb/video/alpha', 'w')
+                    f.write(str(config.av.osd_alpha.value * self.aFadeInDimmed / 10))
+                    f.close()
+                except:
+                    pass
 
-		# fixup circular references
-		del self.helpList
-		GUISkin.close(self)
+            if self.aFadeInDimmed < 10:
+                self.aFadeInTimer.start(2, True)
+            else:
+                try:
+                    f = open('/proc/stb/video/alpha', 'w')
+                    f.write(str(config.av.osd_alpha.value))
+                    f.close()
+                except:
+                    pass
 
-		# first disconnect all render from their sources.
-		# we might split this out into a "unskin"-call,
-		# but currently we destroy the screen afterwards
-		# anyway.
-		for val in self.renderer:
-			val.disconnectAll()  # disconnected converter/sources and probably destroy them. Sources will not be destroyed.
+    def show(self):
+        print '[SCREENNAME] ', self.skinName
+        if self.shown and self.already_shown or not self.instance:
+            return
+        self.shown = True
+        self.already_shown = True
+        if self.fademenu and self.skinName not in ('Mute', 'Volume', 'PictureInPicture',
+                                                   'PictureInPictureZapping', 'Dishpip',
+                                                   'EGAMIMainNews', 'PiPSetup'):
+            self.aFadeInTimer.start(2, True)
+            self.aFadeInDimmed = 0
+        self.instance.show()
+        for f in self.onShow:
+            f()
 
-		del self.session
-		for (name, val) in self.items():
-			val.destroy()
-			del self[name]
+        for val in self.values() + self.renderer:
+            if isinstance(val, GUIComponent) or isinstance(val, Source):
+                val.onShow()
 
-		self.renderer = [ ]
+        for f in self.onShowCode:
+            if type(f) is not type(self.close):
+                exec f in globals(), locals()
+            else:
+                f()
 
-		# really delete all elements now
-		self.__dict__.clear()
+    def hide(self):
+        if not self.shown or not self.instance:
+            return
+        for f in self.onHide:
+            f()
 
-	def close(self, *retval):
-		if not self.execing:
-			self.close_on_next_exec = retval
-		else:
-			self.session.close(self, *retval)
+        for val in self.values() + self.renderer:
+            if isinstance(val, GUIComponent) or isinstance(val, Source):
+                val.onHide()
 
-	def setFocus(self, o):
-		self.instance.setFocus(o.instance)
+        for f in self.onHideCode:
+            if type(f) is not type(self.close):
+                exec f in globals(), locals()
+            else:
+                f()
 
-	def show(self):
-		if (self.shown and self.already_shown) or not self.instance:
-			return
-		self.shown = True
-		self.already_shown = True
-		self.instance.show()
-		for x in self.onShow:
-			x()
-		for val in self.values() + self.renderer:
-			if isinstance(val, GUIComponent) or isinstance(val, Source):
-				val.onShow()
+        if not self.shown:
+            return
+        self.shown = False
+        self.instance.hide()
+        self.restoreAlpha()
 
-	def hide(self):
-		if not self.shown or not self.instance:
-			return
-		self.shown = False
-		self.instance.hide()
-		for x in self.onHide:
-			x()
-		for val in self.values() + self.renderer:
-			if isinstance(val, GUIComponent) or isinstance(val, Source):
-				val.onHide()
+    def setAnimationMode(self, mode):
+        if self.instance:
+            self.instance.setAnimationMode(mode)
 
-	def __repr__(self):
-		return str(type(self))
+    def restoreAlpha(self):
+        if SystemInfo['CanChangeOsdAlpha']:
+            try:
+                f = open('/proc/stb/video/alpha', 'w')
+                f.write(str(config.av.osd_alpha.value))
+                f.close()
+            except:
+                pass
 
-	def getRelatedScreen(self, name):
-		if name == "session":
-			return self.session.screen
-		elif name == "parent":
-			return self.parent
-		elif name == "global":
-			return self.global_screen
-		else:
-			return None
+    def __repr__(self):
+        return str(type(self))
+
+    def getRelatedScreen(self, name):
+        if name == 'session':
+            return self.session.screen
+        else:
+            if name == 'parent':
+                return self.parent
+            if name == 'global':
+                return self.global_screen
+            return None
+            return None
+
+    def getRendererByName(self, name):
+        for renderer in self.renderer:
+            if renderer.name and renderer.name == name:
+                return renderer
+
+        return None
+
+    def getRenderers(self):
+        _renders = dict()
+        for renderer in self.renderer:
+            _renders[renderer.name] = renderer
+
+        return _renders
+
+    renders = property(getRenderers)
+
+    def getAdditionalWidgets(self, name):
+        for widget in self.additionalWidgets:
+            if widget.name == name:
+                return widget
+
+        return None
+
+    def getWidgets(self):
+        _widgets = dict()
+        for widget in self.additionalWidgets:
+            _widgets[widget.name] = widget
+
+        return _widgets
+
+    widgets = property(getWidgets)
+
+    def callback(self, *arg):
+        pass

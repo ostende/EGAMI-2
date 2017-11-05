@@ -1,48 +1,50 @@
+# uncompyle6 version 2.13.2
+# Python bytecode 2.7 (62211)
+# Decompiled from: Python 2.7.12 (default, Nov 19 2016, 06:48:10) 
+# [GCC 5.4.0 20160609]
+# Embedded file name: /usr/lib/enigma2/python/Components/Sources/Boolean.py
+# Compiled at: 2017-10-02 01:52:07
 from Source import Source
 from Components.Element import cached
 from enigma import eTimer
 
-# a small warning:
-# you can use that boolean well to express screen-private
-# conditional expressions.
-#
-# however, if you think that there is ANY interest that another
-# screen could use your expression, please put your calculation
-# into a seperate Source, providing a "boolean"-property.
 class Boolean(Source, object):
-	def __init__(self, fixed = False, function = None, destroy = None, poll = 0):
-		Source.__init__(self)
-		self.function = function
-		self.fixed = fixed
-		self.post_destroy = destroy
-		if poll > 0:
-			self.poll_timer = eTimer()
-			self.poll_timer.callback.append(self.poll)
-			self.poll_timer.start(poll)
-		else:
-			self.poll_timer = None
 
-	@cached
-	def getBoolean(self):
-		if self.function is not None:
-			return self.function()
-		else:
-			return self.fixed
+    def __init__(self, fixed=False, function=None, destroy=None, poll=0):
+        Source.__init__(self)
+        self.function = function
+        self.fixed = fixed
+        self.post_destroy = destroy
+        if poll > 0:
+            self.poll_timer = eTimer()
+            self.poll_timer.callback.append(self.poll)
+            self.poll_timer.start(poll)
+        else:
+            self.poll_timer = None
+        return
 
-	def setBoolean(self, value):
-		assert self.function is None
-		self.fixed = value
-		self.poll()
+    @cached
+    def getBoolean(self):
+        if self.function is not None:
+            return self.function()
+        else:
+            return self.fixed
+            return
 
-	boolean = property(getBoolean, setBoolean)
+    def setBoolean(self, value):
+        self.fixed = value
+        self.poll()
 
-	def poll(self):
-		self.changed((self.CHANGED_ALL,))
+    boolean = property(getBoolean, setBoolean)
 
-	def destroy(self):
-		if self.poll_timer:
-			self.poll_timer.callback.remove(self.poll)
-		if self.post_destroy is not None:
-			self.fixed = self.post_destroy
-			self.poll()
-		Source.destroy(self)
+    def poll(self):
+        self.changed((self.CHANGED_ALL,))
+
+    def destroy(self):
+        if self.poll_timer:
+            self.poll_timer.callback.remove(self.poll)
+        if self.post_destroy is not None:
+            self.fixed = self.post_destroy
+            self.poll()
+        Source.destroy(self)
+        return

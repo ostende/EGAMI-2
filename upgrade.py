@@ -1,36 +1,42 @@
+# uncompyle6 version 2.13.2
+# Python bytecode 2.7 (62211)
+# Decompiled from: Python 2.7.12 (default, Nov 19 2016, 06:48:10) 
+# [GCC 5.4.0 20160609]
+# Embedded file name: /usr/lib/enigma2/python/upgrade.py
+# Compiled at: 2017-10-02 01:52:24
 import os
-
-opkgDestinations = ['/']
+opkgDestinations = [
+ '/']
 opkgStatusPath = ''
 
 def findMountPoint(path):
-	"""Example: findMountPoint("/media/hdd/some/file") returns "/media/hdd\""""
-	path = os.path.abspath(path)
-	while not os.path.ismount(path):
-		path = os.path.dirname(path)
-	return path
+    path = os.path.abspath(path)
+    while not os.path.ismount(path):
+        path = os.path.dirname(path)
+
+    return path
+
 
 def opkgExtraDestinations():
-	global opkgDestinations
-	return ''.join([" --add-dest %s:%s" % (i, i) for i in opkgDestinations])
+    global opkgDestinations
+    return ''.join([ ' --add-dest %s:%s' % (i, i) for i in opkgDestinations ])
+
 
 def opkgAddDestination(mountpoint):
-	global opkgDestinations
-	if mountpoint not in opkgDestinations:
-		opkgDestinations.append(mountpoint)
-		print "[Ipkg] Added to OPKG destinations:", mountpoint
+    if mountpoint not in opkgDestinations:
+        opkgDestinations.append(mountpoint)
+        print '[Ipkg] Added to OPKG destinations:', mountpoint
+
 
 mounts = os.listdir('/media')
 for mount in mounts:
-	mount = os.path.join('/media', mount)
-	if mount and not mount.startswith('/media/net'):
-		if opkgStatusPath == '':
-			# recent opkg versions
-			opkgStatusPath = 'var/lib/opkg/status'
-			if not os.path.exists(os.path.join('/', opkgStatusPath)):
-				# older opkg versions
-				opkgStatusPath = 'usr/lib/opkg/status'
-		if os.path.exists(os.path.join(mount, opkgStatusPath)):
-			opkgAddDestination(mount)
+    mount = os.path.join('/media', mount)
+    if mount and not mount.startswith('/media/net'):
+        if opkgStatusPath == '':
+            opkgStatusPath = 'var/lib/opkg/status'
+            if not os.path.exists(os.path.join('/', opkgStatusPath)):
+                opkgStatusPath = 'usr/lib/opkg/status'
+        if os.path.exists(os.path.join(mount, opkgStatusPath)):
+            opkgAddDestination(mount)
 
 os.system('opkg ' + opkgExtraDestinations() + ' upgrade 2>&1 | tee /home/root/ipkgupgrade.log && reboot')

@@ -1,4 +1,11 @@
+# uncompyle6 version 2.13.2
+# Python bytecode 2.7 (62211)
+# Decompiled from: Python 2.7.12 (default, Nov 19 2016, 06:48:10) 
+# [GCC 5.4.0 20160609]
+# Embedded file name: /usr/lib/enigma2/python/Screens/LanguageSelection.py
+# Compiled at: 2017-10-02 01:52:09
 from Screens.Screen import Screen
+from Screens.MessageBox import MessageBox
 from Components.ActionMap import ActionMap
 from Components.Language import language
 from Components.config import config
@@ -6,109 +13,184 @@ from Components.Sources.List import List
 from Components.Label import Label
 from Components.Sources.StaticText import StaticText
 from Components.Pixmap import Pixmap
-from Screens.InfoBar import InfoBar
+from Components.Language_cache import LANG_TEXT
+from enigma import eTimer
 from Screens.Rc import Rc
-from Tools.Directories import resolveFilename, SCOPE_ACTIVE_SKIN
+from Tools.Directories import resolveFilenameSCOPE_ACTIVE_SKIN
 from Tools.LoadPixmap import LoadPixmap
-
+import gettext
+inWizzard = False
 
 def LanguageEntryComponent(file, name, index):
-	png = LoadPixmap(resolveFilename(SCOPE_ACTIVE_SKIN, "countries/" + index + ".png"))
-	if png is None:
-		png = LoadPixmap(resolveFilename(SCOPE_ACTIVE_SKIN, "countries/" + file + ".png"))
-		if png is None:
-			png = LoadPixmap(resolveFilename(SCOPE_ACTIVE_SKIN, "countries/missing.png"))
-	res = (index, name, png)
-	return res
+    png = LoadPixmap(resolveFilename(SCOPE_ACTIVE_SKIN, 'countries/' + index + '.png'))
+    if png is None:
+        png = LoadPixmap(resolveFilename(SCOPE_ACTIVE_SKIN, 'countries/' + file + '.png'))
+        if png is None:
+            png = LoadPixmap(resolveFilename(SCOPE_ACTIVE_SKIN, 'countries/missing.png'))
+    res = (
+     index, name, png)
+    return res
+
+
+def _cached(x):
+    return LANG_TEXT.get(config.osd.language.value, {}).get(x, '')
+
 
 class LanguageSelection(Screen):
-	def __init__(self, session):
-		Screen.__init__(self, session)
 
-		self.oldActiveLanguage = language.getActiveLanguage()
+    def __init__(self, session):
+        Screen.__init__(self, session)
+        self.setTitle(_('Setup Language'))
+        language.InitLang()
+        self.oldActiveLanguage = language.getActiveLanguage()
+        self.catalog = language.getActiveCatalog()
+        self.list = []
+        self['summarylangname'] = StaticText()
+        self['summarylangsel'] = StaticText()
+        self['languages'] = List(self.list)
+        self['languages'].onSelectionChanged.append(self.changed)
+        self.updateList()
+        self.onLayoutFinish.append(self.selectActiveLanguage)
+        self['key_red'] = Label(_('Cancel'))
+        self['key_green'] = Label(_('Save'))
+        self['key_yellow'] = Label(_('Update Cache'))
+        self['key_blue'] = Label(_('Delete Language'))
+        self['actions'] = ActionMap(['SetupActions', 'ColorActions'], {'ok': self.save,
+           'cancel': self.cancel,
+           'red': self.cancel,
+           'green': self.save,
+           'yellow': self.updateCache,
+           'blue': self.delLang
+           }, -1)
 
-		self.list = []
-		self["summarylangname"] = StaticText()
-		self["languages"] = List(self.list)
+    def updateCache(self):
+        print 'updateCache'
+        self['languages'].setList([('update cache', _('Updating cache, please wait...'), None)])
+        self.updateTimer = eTimer()
+        self.updateTimer.callback.append(self.startupdateCache)
+        self.updateTimer.start(100)
+        return
 
-		self.updateList()
-		self.onLayoutFinish.append(self.selectActiveLanguage)
+    def startupdateCache(self):
+        self.updateTimer.stop()
+        language.updateLanguageCache()
+        self['languages'].setList(self.list)
+        self.selectActiveLanguage()
 
-		self["key_red"] = Label(_("Cancel"))
-		self["key_green"] = Label(_("Save"))
+    def selectActiveLanguage(self):
+        activeLanguage = language.getActiveLanguage()
+        pos = 0
+        for x in self.list:
+            if x[0] == activeLanguage:
+                self['languages'].index = pos
+                break
+            pos += 1
 
-		self["actions"] = ActionMap(["OkCancelActions", "ColorActions"],
-		{
-			"ok": self.save,
-			"cancel": self.cancel,
-			"red": self.cancel,
-			"green": self.save,
-		}, -1)
+    def save(self):
+        global inWizzard
+        self.run()
+        if inWizzard:
+            inWizzard = False
+            self.session.openWithCallback(self.deletelanguagesCB, MessageBox, _('Do you want to delete all other languages?'), default=False)
+        else:
+            self.close(self.oldActiveLanguage != config.osd.language.value)
 
-	def selectActiveLanguage(self):
-		self.setTitle(_("Language selection"))
-		pos = 0
-		for pos, x in enumerate(self.list):
-			if x[0] == self.oldActiveLanguage:
-				self["languages"].index = pos
-				break
+    def deletelanguagesCB(self, anwser):
+        if anwser:
+            language.delLanguage()
+        self.close()
 
-	def save(self):
-		self.commit(self.run())
-		if InfoBar.instance and self.oldActiveLanguage != config.osd.language.value:
-			self.close(True)
-		else:
-			self.close()
+    def cancel(self):
+        language.activateLanguage(self.oldActiveLanguage)
+        config.osd.language.setValue(self.oldActiveLanguage)
+        config.osd.language.save()
+        self.close()
 
-	def cancel(self):
-		language.activateLanguage(self.oldActiveLanguage)
-		self.close()
+    def delLang(self):
+        curlang = config.osd.language.value
+        lang = curlang
+        languageList = language.getLanguageListSelection()
+        for t in languageList:
+            if curlang == t[0]:
+                lang = t[1]
+                break
 
-	def run(self):
-		print "updating language..."
-		lang = self["languages"].getCurrent()[0]
-		if lang != config.osd.language.value:
-			config.osd.language.setValue(lang)
-			config.osd.language.save()
-		return lang
+        self.session.openWithCallback(self.delLangCB, MessageBox, _('Do you want to delete all other languages?') + _(' Except %s') % lang, default=False)
 
-	def commit(self, lang):
-		print "commit language"
-		language.activateLanguage(lang)
-		config.misc.languageselected.value = 0
-		config.misc.languageselected.save()
+    def delLangCB(self, anwser):
+        if anwser:
+            language.delLanguage()
+            language.activateLanguage(self.oldActiveLanguage)
+            self.updateList()
+            self.selectActiveLanguage()
 
-	def updateList(self):
-		languageList = language.getLanguageList()
-		if not languageList: # no language available => display only english
-			list = [ LanguageEntryComponent("en", "English (UK)", "en_GB") ]
-		else:
-			list = [ LanguageEntryComponent(file = x[1][2].lower(), name = x[1][0], index = x[0]) for x in languageList]
-		self.list = list
-		self["languages"].list = list
+    def run(self, justlocal=False):
+        print 'updating language...'
+        lang = self['languages'].getCurrent()[0]
+        if lang == 'update cache':
+            self.setTitle('Updating cache')
+            self['summarylangname'].setText('Updating cache')
+            return
+        if lang != config.osd.language.value:
+            config.osd.language.setValue(lang)
+            config.osd.language.save()
+        self.setTitle(_cached('T2'))
+        self['summarylangname'].setText(_cached('T2'))
+        self['summarylangsel'].setText(self['languages'].getCurrent()[1])
+        self['key_red'].setText(_cached('T3'))
+        self['key_green'].setText(_cached('T4'))
+        if justlocal:
+            return
+        language.activateLanguage(lang)
+        config.misc.languageselected.value = 0
+        config.misc.languageselected.save()
+        print 'ok'
+
+    def updateList(self):
+        languageList = language.getLanguageList()
+        if not languageList:
+            list = [
+             LanguageEntryComponent('en', 'English (US)', 'en_US')]
+        else:
+            list = [ LanguageEntryComponent(file=x[1][2].lower(), name=x[1][0], index=x[0]) for x in languageList ]
+        self.list = list
+        self['languages'].list = list
+
+    def changed(self):
+        self.run(justlocal=True)
+
 
 class LanguageWizard(LanguageSelection, Rc):
-	def __init__(self, session):
-		LanguageSelection.__init__(self, session)
-		Rc.__init__(self)
-		self.onLayoutFinish.append(self.selectKeys)
-		self["wizard"] = Pixmap()
-		self["summarytext"] = StaticText()
-		self["text"] = Label()
-		self.setText()
 
-	def selectKeys(self):
-		self.clearSelectedKeys()
-		self.selectKey("UP")
-		self.selectKey("DOWN")
+    def __init__(self, session):
+        global inWizzard
+        LanguageSelection.__init__(self, session)
+        Rc.__init__(self)
+        inWizzard = True
+        self.onLayoutFinish.append(self.selectKeys)
+        self['wizard'] = Pixmap()
+        self['summarytext'] = StaticText()
+        self['text'] = Label()
+        self.setText()
 
-	def setText(self):
-		self["text"].setText(_("Please use the UP and DOWN keys to select your language. Afterwards press the OK button."))
-		self["summarytext"].setText(_("Please use the UP and DOWN keys to select your language. Afterwards press the OK button."))
+    def selectKeys(self):
+        self.clearSelectedKeys()
+        self.selectKey('UP')
+        self.selectKey('DOWN')
 
-	def createSummary(self):
-		return LanguageWizardSummary
+    def changed(self):
+        self.run(justlocal=True)
+        self.setText()
+
+    def setText(self):
+        self['text'].setText(_cached('T1'))
+        self['summarytext'].setText(_cached('T1'))
+
+    def createSummary(self):
+        return LanguageWizardSummary
+
 
 class LanguageWizardSummary(Screen):
-	def __init__(self, session, parent):
-		Screen.__init__(self, session, parent)
+
+    def __init__(self, session, parent):
+        Screen.__init__(self, session, parent)

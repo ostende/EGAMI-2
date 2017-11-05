@@ -1,129 +1,94 @@
-from Components.config import ConfigSubsection, config
+# uncompyle6 version 2.13.2
+# Python bytecode 2.7 (62211)
+# Decompiled from: Python 2.7.12 (default, Nov 19 2016, 06:48:10) 
+# [GCC 5.4.0 20160609]
+# Embedded file name: /usr/lib/enigma2/python/Plugins/Plugin.py
+# Compiled at: 2017-10-02 01:52:17
+from Components.config import ConfigSubsectionconfig
 import os
-
 config.plugins = ConfigSubsection()
 
 class PluginDescriptor:
-	"""An object to describe a plugin."""
+    WHERE_EXTENSIONSMENU = 1
+    WHERE_MAINMENU = 2
+    WHERE_PLUGINMENU = 3
+    WHERE_MOVIELIST = 4
+    WHERE_MENU = 5
+    WHERE_AUTOSTART = 6
+    WHERE_WIZARD = 7
+    WHERE_SESSIONSTART = 8
+    WHERE_TELETEXT = 9
+    WHERE_FILESCAN = 10
+    WHERE_NETWORKSETUP = 11
+    WHERE_EVENTINFO = 12
+    WHERE_NETWORKCONFIG_READ = 13
+    WHERE_AUDIOMENU = 14
+    WHERE_SOFTWAREMANAGER = 15
+    WHERE_CHANNEL_CONTEXT_MENU = 16
+    WHERE_NETWORKMOUNTS = 17
+    WHERE_VIXMENU = 18
+    WHERE_RECORDTIMER = 19
+    WHERE_SATCONFIGCHANGED = 20
+    WHERE_SERVICESCAN = 21
+    WHERE_EXTENSIONSINGLE = 22
 
-	# where to list the plugin. Note that there are different call arguments,
-	# so you might not be able to combine them.
+    def __init__(self, name='Plugin', where=None, description='', icon=None, fnc=None, wakeupfnc=None, needsRestart=None, internal=False, weight=0):
+        if not where:
+            where = []
+        self.name = name
+        self.internal = internal
+        self.needsRestart = needsRestart
+        self.path = None
+        if isinstance(where, list):
+            self.where = where
+        else:
+            self.where = [
+             where]
+        self.description = description
+        if icon is None or isinstance(icon, str):
+            self.iconstr = icon
+            self._icon = None
+        else:
+            self.iconstr = None
+            self._icon = icon
+        self.weight = weight
+        self.wakeupfnc = wakeupfnc
+        self.__call__ = fnc
+        return
 
-	# supported arguments are:
-	#   session
-	#   servicereference
-	#   reason
+    def updateIcon(self, path):
+        self.path = path
 
-	# you have to ignore unknown kwargs!
+    def getWakeupTime(self):
+        return self.wakeupfnc and self.wakeupfnc() or -1
 
-	# argument: session
-	WHERE_EXTENSIONSMENU = 1
-	WHERE_MAINMENU = 2
-	WHERE_PLUGINMENU  = 3
-	# argument: session, serviceref (currently selected)
-	WHERE_MOVIELIST = 4
-	# argument: menuid. Fnc must return list with menuitems (4-tuple of name, fnc to call, entryid or None, weight or None)
-	WHERE_MENU = 5
+    @property
+    def icon(self):
+        if self.iconstr:
+            from Tools.LoadPixmap import LoadPixmap
+            return LoadPixmap(os.path.join(self.path, self.iconstr))
+        else:
+            return self._icon
 
-	# reason (0: start, 1: end)
-	WHERE_AUTOSTART = 6
+    def __eq__(self, other):
+        return self.__call__ == other.__call__
 
-	# start as wizard. In that case, fnc must be tuple (priority,class) with class being a screen class!
-	WHERE_WIZARD = 7
+    def __ne__(self, other):
+        return self.__call__ != other.__call__
 
-	# like autostart, but for a session. currently, only session starts are
-	# delivered, and only on pre-loaded plugins
-	WHERE_SESSIONSTART = 8
+    def __lt__(self, other):
+        if self.weight < other.weight:
+            return True
+        else:
+            if self.weight == other.weight:
+                return self.name < other.name
+            return False
 
-	# start as teletext plugin. arguments: session, serviceref
-	WHERE_TELETEXT = 9
+    def __gt__(self, other):
+        return other < self
 
-	# file-scanner, fnc must return a list of Scanners
-	WHERE_FILESCAN = 10
+    def __ge__(self, other):
+        return not self < other
 
-	# fnc must take an interface name as parameter and return None if the plugin supports an extended setup
-	# or return a function which is called with session and the interface name for extended setup of this interface
-	WHERE_NETWORKSETUP = 11
-
-	# show up this plugin (or a choicebox with all of them) for long INFO keypress
-	# or return a function which is called with session and the interface name for extended setup of this interface
-	WHERE_EVENTINFO = 12
-
-	# reason (True: Networkconfig read finished, False: Networkconfig reload initiated )
-	WHERE_NETWORKCONFIG_READ = 13
-
-	WHERE_AUDIOMENU = 14
-
-	# fnc 'SoftwareSupported' or  'AdvancedSoftwareSupported' must take a parameter and return None
-	# if the plugin should not be displayed inside Softwaremanger or return a function which is called with session
-	# and 'None' as parameter to call the plugin from the Softwaremanager menus. "menuEntryName" and "menuEntryDescription"
-	# should be provided to name and describe the new menu entry.
-	WHERE_SOFTWAREMANAGER = 15
-
-	# fnc must take an interface name as parameter and return None if the plugin supports an extended setup
-	# or return a function which is called with session and the interface name for extended setup of this interface
-	WHERE_NETWORKMOUNTS = 16
-
-	WHERE_VIXMENU = 17
-
-	def __init__(self, name="Plugin", where=None, description="", icon=None, fnc=None, wakeupfnc=None, needsRestart=None, internal=False, weight=0):
-		if not where: where = []
-		self.name = name
-		self.internal = internal
-		self.needsRestart = needsRestart
-		self.path = None
-		if isinstance(where, list):
-			self.where = where
-		else:
-			self.where = [ where ]
-		self.description = description
-
-		if icon is None or isinstance(icon, str):
-			self.iconstr = icon
-			self._icon = None
-		else:
-			self.iconstr = None
-			self._icon = icon
-
-		self.weight = weight
-
-		self.wakeupfnc = wakeupfnc
-
-		self.__call__ = fnc
-
-	def updateIcon(self, path):
-		self.path = path
-
-	def getWakeupTime(self):
-		return self.wakeupfnc and self.wakeupfnc() or -1
-
-	@property
-	def icon(self):
-		if self.iconstr:
-			from Tools.LoadPixmap import LoadPixmap
-			return LoadPixmap(os.path.join(self.path, self.iconstr))
-		else:
-			return self._icon
-
-	def __eq__(self, other):
-		return self.__call__ == other.__call__
-
-	def __ne__(self, other):
-		return self.__call__ != other.__call__
-
-	def __lt__(self, other):
-		if self.weight < other.weight:
-			return True
-		elif self.weight == other.weight:
-			return self.name < other.name
-		else:
-			return False
-
-	def __gt__(self, other):
-		return other<self
-
-	def __ge__(self, other):
-		return not self<other
-
-	def __le__(self, other):
-		return not other<self
+    def __le__(self, other):
+        return not other < self

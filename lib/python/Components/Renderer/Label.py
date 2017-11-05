@@ -1,22 +1,33 @@
+# uncompyle6 version 2.13.2
+# Python bytecode 2.7 (62211)
+# Decompiled from: Python 2.7.12 (default, Nov 19 2016, 06:48:10) 
+# [GCC 5.4.0 20160609]
+# Embedded file name: /usr/lib/enigma2/python/Components/Renderer/Label.py
+# Compiled at: 2017-10-02 01:52:08
 from Components.VariableText import VariableText
 from Renderer import Renderer
-
 from enigma import eLabel
 
 class Label(VariableText, Renderer):
-	def __init__(self):
-		Renderer.__init__(self)
-		VariableText.__init__(self)
 
-	GUI_WIDGET = eLabel
+    def __init__(self):
+        Renderer.__init__(self)
+        VariableText.__init__(self)
 
-	def connect(self, source):
-		Renderer.connect(self, source)
-		self.changed((self.CHANGED_DEFAULT,))
+    GUI_WIDGET = eLabel
 
-	def changed(self, what):
-		if what[0] == self.CHANGED_CLEAR:
-			self.text = ""
-		else:
-			self.text = self.source.text
+    def connect(self, source):
+        if source:
+            Renderer.connect(self, source)
+            self.changed((self.CHANGED_DEFAULT,))
+        else:
+            print 'SKINERROR: render label has no source'
 
+    def changed(self, what):
+        if what[0] == self.CHANGED_CLEAR:
+            self.text = ''
+        elif self.source:
+            self.text = self.source.text
+        else:
+            self.text = '<no-source>'
+            print 'SKINERROR: render label has no source'

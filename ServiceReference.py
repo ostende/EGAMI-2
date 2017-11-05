@@ -1,59 +1,68 @@
-from enigma import eServiceReference, eServiceCenter, getBestPlayableServiceReference
+# uncompyle6 version 2.13.2
+# Python bytecode 2.7 (62211)
+# Decompiled from: Python 2.7.12 (default, Nov 19 2016, 06:48:10) 
+# [GCC 5.4.0 20160609]
+# Embedded file name: /usr/lib/enigma2/python/ServiceReference.py
+# Compiled at: 2017-10-02 01:52:24
+from enigma import eServiceReferenceeServiceCentergetBestPlayableServiceReference
 import NavigationInstance
 
 class ServiceReference(eServiceReference):
-	def __init__(self, ref, reftype = eServiceReference.idInvalid, flags = 0, path = ''):
-		if reftype != eServiceReference.idInvalid:
-			self.ref = eServiceReference(reftype, flags, path)
-		elif not isinstance(ref, eServiceReference):
-			self.ref = eServiceReference(ref or "")
-		else:
-			self.ref = ref
-		self.serviceHandler = eServiceCenter.getInstance()
 
-	def __str__(self):
-		return self.ref.toString()
+    def __init__(self, ref, reftype=eServiceReference.idInvalid, flags=0, path=''):
+        if reftype != eServiceReference.idInvalid:
+            self.ref = eServiceReference(reftype, flags, path)
+        elif not isinstance(ref, eServiceReference):
+            self.ref = eServiceReference(ref or '')
+        else:
+            self.ref = ref
+        self.serviceHandler = eServiceCenter.getInstance()
 
-	def getServiceName(self):
-		info = self.info()
-		return info and info.getName(self.ref) or ""
+    def __str__(self):
+        return self.ref.toString()
 
-	def info(self):
-		return self.serviceHandler.info(self.ref)
+    def getServiceName(self):
+        info = self.info()
+        return info and info.getName(self.ref) or ''
 
-	def list(self):
-		return self.serviceHandler.list(self.ref)
+    def info(self):
+        return self.serviceHandler.info(self.ref)
 
-	def getType(self):
-		return self.ref.type
+    def list(self):
+        return self.serviceHandler.list(self.ref)
 
-	def getPath(self):
-		return self.ref.getPath()
+    def getType(self):
+        return self.ref.type
 
-	def getFlags(self):
-		return self.ref.flags
+    def getPath(self):
+        return self.ref.getPath()
 
-	def isRecordable(self):
-		ref = self.ref
-		return ref.flags & eServiceReference.isGroup or (ref.type == eServiceReference.idDVB or ref.type == eServiceReference.idDVB + 0x100)
+    def getFlags(self):
+        return self.ref.flags
+
+    def isRecordable(self):
+        ref = self.ref
+        return ref.flags & eServiceReference.isGroup or ref.type == eServiceReference.idDVB or ref.type == eServiceReference.idDVB + 256 or ref.type == 8192 or ref.type == 4097
+
 
 def getPlayingref(ref):
-	playingref = None
-	if NavigationInstance.instance:
-		playingref = NavigationInstance.instance.getCurrentlyPlayingServiceReference()
-	if not playingref:
-		playingref = eServiceReference()
-	return playingref
+    playingref = None
+    if NavigationInstance.instance:
+        playingref = NavigationInstance.instance.getCurrentlyPlayingServiceReference()
+    if not playingref:
+        playingref = eServiceReference()
+    return playingref
+
 
 def isPlayableForCur(ref):
-	info = eServiceCenter.getInstance().info(ref)
-	return not not (info and info.isPlayable(ref, getPlayingref(ref)))
+    info = eServiceCenter.getInstance().info(ref)
+    return not not (info and info.isPlayable(ref, getPlayingref(ref)))
+
 
 def resolveAlternate(ref):
-	nref = None
-	if ref.flags & eServiceReference.isGroup:
-		nref = getBestPlayableServiceReference(ref, getPlayingref(ref))
-		if not nref:
-			nref = getBestPlayableServiceReference(ref,
-			 eServiceReference(), True)
-	return nref
+    nref = None
+    if ref.flags & eServiceReference.isGroup:
+        nref = getBestPlayableServiceReference(ref, getPlayingref(ref))
+        if not nref:
+            nref = getBestPlayableServiceReference(ref, eServiceReference(), True)
+    return nref
